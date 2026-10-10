@@ -6,7 +6,7 @@ It is a **native cross-platform mobile app for Android and iOS**, backed by a se
 
 ## Status
 
-**Foundation stage.** The product, UX and architecture are defined, and the monorepo and tooling foundation is in place. **No product features exist yet.** The mobile app has only a foundation screen and an API connection check, and the API serves only `GET /v1/health`.
+**Early build.** The mobile app has its four primary destinations (Home, Wardrobe, Stylist, Profile) with the visual identity in place. **No product features are functional yet:** there is no sign-in, persistence, garment capture or outfit generation. Home stories and the example Style Profile are sample content and are labelled as such. The API serves only `GET /v1/health`; a developer check for it is linked from Profile in development builds.
 
 ## Documentation map
 
@@ -66,6 +66,19 @@ cp apps/mobile/.env.example apps/mobile/.env   # then set EXPO_PUBLIC_API_URL fo
 | `pnpm test` | Runs all tests (`test:server` uses Vitest, `test:mobile` uses Jest + React Native Testing Library) |
 
 The app runs as an Expo **development build**, not Expo Go, because later milestones need native modules. Build it once with the `android`/`ios` command. After that, `pnpm dev:mobile` is enough until a native dependency changes.
+
+### Preview on Android with Expo Go
+
+A temporary way to see the app on a phone without the Android SDK. It works only while the app uses no native modules beyond those included in Expo Go. Future native modules may require a custom development build.
+
+Prerequisites: dependencies installed (`pnpm install`), a compatible version of the **Expo Go** app on an Android phone, and the phone and PC on the same Wi-Fi network.
+
+1. From the repository root, run `pnpm --filter @fashion-saavy/mobile exec expo start --go`. Note that `pnpm dev:mobile` targets the development build, which Expo Go can't open.
+2. In Expo Go, scan the QR code shown in the terminal.
+
+- If the phone can't find the PC (common on campus Wi-Fi), connect the PC to the phone's hotspot and try again.
+- If Expo Go reports an SDK version mismatch, follow Expo's compatibility guidance for this project's Expo SDK version (see `expo` in `apps/mobile/package.json`).
+- The developer API status screen (linked from Profile when the app runs from the dev server) is optional. To use it, set `EXPO_PUBLIC_API_URL` in `apps/mobile/.env` to `http://<PC LAN IP>:3000`, start the API separately with `pnpm dev:server`, then restart Expo. The rest of the app doesn't need the API.
 
 ### Dependency notes
 

@@ -9,3 +9,11 @@ export function getApiBaseUrl(): string {
   }
   return url.replace(/\/+$/, '');
 }
+
+/**
+ * Development-only identity, sent as `X-Dev-User-Id` until real sign-in exists.
+ * It is public (bundled) and grants nothing unless the API runs with DEV_AUTH=true, which it refuses in production.
+ */
+export function getDevUserId(): string | undefined {
+  return process.env.EXPO_PUBLIC_DEV_USER_ID || undefined;
+}

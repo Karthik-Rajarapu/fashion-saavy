@@ -22,3 +22,6 @@ coverage/
 *.log
 .DS_Store
 Thumbs.db
+
+# Local server data: embedded database and uploaded photos
+.data/
