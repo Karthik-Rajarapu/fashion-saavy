@@ -1,0 +1,16 @@
+{
+  "name": "fashion-saavy",
+  "private": true,
+  "packageManager": "pnpm@12.9.1",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev:server": "pnpm --filter @fashion-saavy/server dev",
+    "dev:mobile": "pnpm --filter @fashion-saavy/mobile start",
+    "typecheck": "pnpm --recursive typecheck",
+    "test": "pnpm --recursive test",
+    "test:server": "pnpm --filter @fashion-saavy/server test",
+    "test:mobile": "pnpm --filter @fashion-saavy/mobile test"
+  }
+}

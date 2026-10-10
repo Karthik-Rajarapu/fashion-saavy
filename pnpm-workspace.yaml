@@ -1,0 +1,11 @@
+packages:
+  - apps/*
+  - packages/*
+
+# Peers are declared explicitly (matching Expo SDK versions) rather than auto-installed at "latest",
+# which pulled in versions incompatible with React Native 0.86 / React 19.2 and optional native modules.
+autoInstallPeers: false
+
+# Dependencies allowed to run install scripts (pnpm blocks all others).
+allowBuilds:
+  esbuild: true
