@@ -9,7 +9,11 @@ const config: ExpoConfig = {
   platforms: ['android', 'ios'],
   // Placeholder identifiers for local development builds; confirm before any store setup.
   ios: { bundleIdentifier: 'com.fashionsaavy.app' },
-  android: { package: 'com.fashionsaavy.app' },
+  android: {
+    package: 'com.fashionsaavy.app',
+    // Garment capture takes photos only. expo-image-picker otherwise adds the microphone permission on Android.
+    blockedPermissions: ['android.permission.RECORD_AUDIO'],
+  },
   plugins: [
     'expo-router',
     [

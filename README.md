@@ -6,7 +6,11 @@ It is a **native cross-platform mobile app for Android and iOS**, backed by a se
 
 ## Status
 
-**Early build.** The mobile app has its four primary destinations (Home, Wardrobe, Stylist, Profile) with the visual identity in place. **No product features are functional yet:** there is no sign-in, persistence, garment capture or outfit generation. Home stories and the example Style Profile are sample content and are labelled as such. The API serves only `GET /v1/health`; a developer check for it is linked from Profile in development builds.
+**Early build.** The mobile app has its four primary destinations (Home, Wardrobe, Stylist, Profile) with the visual identity in place.
+
+- **Works:** the wardrobe. You can add a garment with a photo, review and edit its details, see it in Wardrobe, edit it and delete it. Garments and photos are stored by the API server, so they survive app restarts.
+- **Development-only foundations:** there is no real sign-in yet. Identity is a development header (`DEV_AUTH`), and the server refuses to run in production. The database is embedded PostgreSQL (PGlite), and photos are kept on the server's local disk (see [ARCHITECTURE.md](docs/ARCHITECTURE.md), "Open architecture decisions").
+- **Not built yet:** the style questionnaire, outfit generation and Try-On. Home stories and the example Style Profile are sample content and are labelled as such.
 
 ## Documentation map
 
@@ -45,12 +49,13 @@ The full rationale is in [ARCHITECTURE.md §2](docs/ARCHITECTURE.md#2-technology
 - **Android Studio**, only for the Android SDK, platform tools and emulator (not used as the editor). Set `ANDROID_HOME`.
 - An Android device or emulator. For iOS, either a Mac with Xcode (simulator and local builds) or EAS cloud builds (not yet configured) installed on a physical iPhone.
 
-Docker (PostgreSQL, S3-compatible storage) and an Anthropic API key will be needed once the server gains a database and AI features. Neither is needed yet.
+No Docker or database server is needed yet. The API embeds PostgreSQL (PGlite) and stores photos on local disk, under `apps/server/.data/` (gitignored). An Anthropic API key will be needed once AI features exist.
 
 ### First run
 
 ```sh
 pnpm install
+cp apps/server/.env.example apps/server/.env   # DEV_AUTH=true and a STORAGE_SIGNING_SECRET for local development
 cp apps/mobile/.env.example apps/mobile/.env   # then set EXPO_PUBLIC_API_URL for your device (see the file)
 ```
 
@@ -58,7 +63,7 @@ cp apps/mobile/.env.example apps/mobile/.env   # then set EXPO_PUBLIC_API_URL fo
 
 | Command | What it does |
 |---|---|
-| `pnpm dev:server` | Starts the API on port 3000 (override with `PORT`), with reload on change |
+| `pnpm dev:server` | Starts the API on port 3000 (override with `PORT`), with reload on change. It applies database migrations on start |
 | `pnpm dev:mobile` | Starts the Expo dev server for the development build |
 | `pnpm --filter @fashion-saavy/mobile android` | Builds and installs the Android development build (needs the Android SDK) |
 | `pnpm --filter @fashion-saavy/mobile ios` | Builds and installs the iOS development build (macOS + Xcode only) |

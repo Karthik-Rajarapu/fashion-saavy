@@ -34,13 +34,13 @@
 |---|---|---|
 | Runtime / language | **Node.js LTS**, TypeScript (strict) | The same language as the client, with shared contracts. |
 | HTTP framework | **Hono** | Small, TypeScript-first and standards-based, with first-class Zod validation. A plain JSON API needs nothing heavier. |
-| Database | **PostgreSQL** | The data is relational (users → garments → outfits → feedback), so we need constraints and transactions. JSONB covers the evolving garment-attribute and context shapes. Postgres can also back the job queue. |
+| Database | **PostgreSQL** | The data is relational (users → garments → outfits → feedback), so we need constraints and transactions. JSONB covers the evolving garment-attribute and context shapes. Postgres can also back the job queue. **Interim (implemented):** development and tests run PGlite, the PostgreSQL engine embedded in the Node process (on disk in development, in memory in tests). A driver for a hosted Postgres server is not built yet, and the server refuses to start in production. |
 | Data access | **Drizzle ORM** + SQL migrations | Typed and close to SQL, with explicit, reviewable migrations. |
 | Validation / contracts | **Zod**, shared through a contracts package | One schema each for request/response DTOs, AI output and config, validated on both sides of the wire. |
-| Media storage | **S3-compatible object storage** (private) | Garment images are large and private. Uploads and downloads use short-lived signed URLs. The vendor is chosen at deployment time. |
+| Media storage | **S3-compatible object storage** (private) | Garment images are large and private. Uploads and downloads use short-lived signed URLs. The vendor is chosen at deployment time. **Interim (implemented):** a private local-disk adapter behind the same signed-URL interface, served by the API's `/v1/uploads/:token` and `/v1/files/:token` capability routes. |
 | Image processing | **sharp** | Normalization, resizing, EXIF/GPS stripping, derivatives. |
 | Background jobs | **pg-boss** | Handles AI extraction, Try-On asset generation, saved-outfit expiry and reminders, with no Redis. |
-| Auth | **Better Auth** + its Expo client integration | Self-hosted, with sessions in our Postgres. The token is kept in secure storage on the device. |
+| Auth | **Better Auth** + its Expo client integration | Self-hosted, with sessions in our Postgres. The token is kept in secure storage on the device. **Interim (implemented):** none of this exists yet. A development-only identity trusts the `X-Dev-User-Id` header when the server runs with `DEV_AUTH=true`, and the config refuses that in production. Data is still owner-scoped and tested for cross-user isolation. |
 | AI (language + vision) | **Anthropic Claude** via the official SDK, behind internal `ai` ports | One provider covers garment attribute extraction (vision) and outfit composition/rationale, with structured output. Models are set in config, and the port allows a provider swap. |
 
 ### Shared tooling
@@ -52,7 +52,7 @@
 | Builds & distribution | **EAS Build / Submit** for store builds, especially iOS from non-macOS machines. **EAS Update** for JS-only over-the-air fixes. *(Approved; build and release setup is deferred until it is needed.)* |
 | Testing | Server: **Vitest** against real Postgres in Docker. Mobile: **Jest (jest-expo) + React Native Testing Library**. E2E: **Maestro** on Android emulator and iOS simulator/device. |
 | Quality | TypeScript strict, checked per package with `tsc --noEmit`; workspace packages are consumed as TypeScript source (no build step). ESLint and Prettier are planned but not yet configured. |
-| Local services | Docker Compose for Postgres and an S3-compatible store |
+| Local services | None needed yet (PGlite and local-disk storage, see above). Docker Compose for Postgres and an S3-compatible store once those adapters exist. |
 | Hosting | API: any container host + managed Postgres + S3-compatible storage. App: Google Play and the Apple App Store. |
 
 ## 3. Application structure (planned)
@@ -194,7 +194,7 @@ All model access is **server-side only**, through `apps/server/src/platform/ai`.
 
 - **Capture:** expo-image-picker (camera or library). Camera and photo-library permissions are requested in context, never during onboarding, with purpose strings declared in app config. If permission is denied, the app explains why it's needed and links to system settings.
 - **Pre-upload:** the client resizes and compresses with expo-image-manipulator to keep cellular uploads small. The client must not be trusted for sanitization.
-- **Upload:** the API issues a short-lived signed PUT URL scoped to `users/{userId}/…`. The app uploads directly to object storage, then calls the API to confirm, which enqueues processing.
+- **Upload:** `POST /v1/garment-images` returns an upload ticket shaped like an S3 presigned POST (`url`, `fields`, `fileField`, size and type limits). The app sends `multipart/form-data` there, then creates or updates a garment that references the returned image id. With the local-disk adapter, the API processes the photo during the upload. With S3, processing runs when the garment references the image. Photos are stored under `users/{userId}/garment-images/{imageId}/`, and only re-encoded display and thumbnail JPEGs are kept (no originals, no EXIF).
 - **Server processing:** validate type and size → strip EXIF (including GPS) → normalize orientation and format → generate display, thumbnail and (later) Try-On derivatives → hand off to AI extraction.
 - **Reads:** the bucket is private and images are served through short-lived signed URLs. Signed URLs change, so expo-image caching must be keyed by the stable image ID, not by the URL.
 - Only processed derivatives are sent to the AI provider, never originals with metadata.
@@ -254,4 +254,5 @@ Each vendor sits behind one adapter. Domain code never imports vendor SDKs.
 | Pose estimation library for Try-On | MediaPipe vs ML Kit spike | A spike before Try-On work starts |
 | Reminder delivery mechanism | Depends on the product decision (in-app / push / email) | Product decision (PRODUCT.md open questions) |
 | Developer accounts | Apple Developer Program, Google Play Console | Required before device distribution and store release |
+| Secure cross-device identity and hosting | Better Auth (documented), a hosted Postgres driver and the S3 adapter | The sign-in method (open product question in PRODUCT.md) and a hosting choice. Until then, data is per development server and identity is the dev-only header. |
 | App identifiers | `com.fashionsaavy.app` (Android package and iOS bundle ID), used for local development builds only | Confirmation before any store or EAS setup; the identifiers are permanent once published |

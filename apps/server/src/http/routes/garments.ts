@@ -1,6 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import { CreateGarmentRequestSchema, UpdateGarmentRequestSchema } from '@fashion-saavy/contracts';
+import type { Auth } from '../../modules/identity';
 import { NotFoundError, type RequestContext, type WardrobeService } from '../../modules/wardrobe';
 import { readJson } from '../errors';
 import { requireUser, type AppEnv } from '../identity';
@@ -16,8 +17,8 @@ function garmentId(c: Context<AppEnv>): string {
   return id.data.toLowerCase();
 }
 
-export function garmentRoutes({ wardrobe, devAuth }: { wardrobe: WardrobeService; devAuth: boolean }) {
-  const user = requireUser({ devAuth });
+export function garmentRoutes({ wardrobe, auth }: { wardrobe: WardrobeService; auth: Auth }) {
+  const user = requireUser(auth);
 
   return new Hono<AppEnv>()
     .get('/garments', user, async (c) => c.json({ garments: await wardrobe.list(requestContext(c)) }))

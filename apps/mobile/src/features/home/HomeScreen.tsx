@@ -16,7 +16,7 @@ const storyLabel = (story: Story) => `Sample story: ${story.title}. ${story.dek}
 
 export function HomeScreen() {
   const router = useRouter();
-  const { garmentCount } = useWardrobeSummary();
+  const { garmentCount, isError: wardrobeError } = useWardrobeSummary();
   const now = new Date();
   const [lead, ...notes] = SAMPLE_STORIES;
   const openStory = (story: Story) => router.push({ pathname: '/story/[id]', params: { id: story.id } });
@@ -62,7 +62,11 @@ export function HomeScreen() {
 
       <View style={[styles.wardrobeBand, styles.fullBleed]}>
         <AppText variant="kicker">Dress from what you own</AppText>
-        {garmentCount === 0 ? (
+        {garmentCount === null ? (
+          <AppText tone="muted">
+            {wardrobeError ? "Couldn't check your wardrobe right now." : 'Checking your wardrobe…'}
+          </AppText>
+        ) : garmentCount === 0 ? (
           <>
             <AppText variant="title">Your wardrobe starts here.</AppText>
             <AppText>

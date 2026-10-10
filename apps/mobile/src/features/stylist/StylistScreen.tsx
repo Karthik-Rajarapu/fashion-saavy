@@ -8,14 +8,14 @@ import { Rule } from '../../ui/Rule';
 import { Screen } from '../../ui/Screen';
 import { colors, fonts, minTouch, space } from '../../ui/tokens';
 import { useStyleProfile } from '../profile/style-profile-state';
-import { useWardrobeSummary } from '../wardrobe/wardrobe-state';
+import { pieceCount, useWardrobeSummary } from '../wardrobe/wardrobe-state';
 
 const OCCASIONS = ['College', 'Everyday', 'Weekend', 'Festive', 'Date night', 'Interview'] as const;
 
 export function StylistScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ request?: string; handoff?: string }>();
-  const { garmentCount } = useWardrobeSummary();
+  const { garmentCount, isError: wardrobeError } = useWardrobeSummary();
   const profile = useStyleProfile();
   const [request, setRequest] = useState(params.request ?? '');
   const [occasion, setOccasion] = useState<string | null>(null);
@@ -29,7 +29,14 @@ export function StylistScreen() {
   const ingredients = [
     {
       title: 'Your wardrobe',
-      status: garmentCount === 0 ? 'Empty. Add a few pieces to begin.' : `${garmentCount} pieces to choose from`,
+      status:
+        garmentCount === null
+          ? wardrobeError
+            ? "Couldn't check your wardrobe right now."
+            : 'Checking your wardrobe…'
+          : garmentCount === 0
+            ? 'Empty. Add a few pieces to begin.'
+            : `${pieceCount(garmentCount)} to choose from`,
     },
     {
       title: 'Your Style Profile',
@@ -105,9 +112,9 @@ export function StylistScreen() {
             <Button label="Take the style questionnaire" variant="link" onPress={() => router.push('/questionnaire')} />
           )}
         </View>
-      ) : (
+      ) : garmentCount !== null ? (
         <AppText tone="muted">Outfit creation arrives in the next build.</AppText>
-      )}
+      ) : null}
 
       <AppText variant="small" tone="muted">
         Every outfit will come with a short note on why it works. You'll be able to swap single pieces, save it, tell

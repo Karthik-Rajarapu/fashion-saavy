@@ -3,14 +3,23 @@ import sharp from 'sharp';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ApiErrorResponseSchema, GarmentSchema, ImageUploadTicketSchema } from '@fashion-saavy/contracts';
 import { signToken } from '../platform/storage/signing';
-import { ALICE, BOB, createTestServer, samplePhoto } from '../test/harness';
+import { createTestServer, samplePhoto, type Session } from '../test/harness';
 
 let server: Awaited<ReturnType<typeof createTestServer>>;
 beforeAll(async () => {
   server = await createTestServer();
 });
+let alice: Session;
+let bob: Session;
+// Session cookies of two signed-in users.
+let ALICE: string;
+let BOB: string;
 beforeEach(async () => {
   await server.reset();
+  alice = await server.signIn('alice@example.com');
+  bob = await server.signIn('bob@example.com');
+  ALICE = alice.cookie;
+  BOB = bob.cookie;
 });
 afterAll(async () => {
   await server.close();
@@ -19,7 +28,7 @@ afterAll(async () => {
 const errorCode = (body: unknown) => ApiErrorResponseSchema.parse(body).error.code;
 
 async function ticket(user = ALICE) {
-  const res = await server.request('POST', '/v1/garment-images', { user });
+  const res = await server.request('POST', '/v1/garment-images', { cookie: user });
   expect(res.status).toBe(201);
   return ImageUploadTicketSchema.parse(res.body);
 }
@@ -46,7 +55,7 @@ describe('photo upload and storage', () => {
 
     const imageId = await server.uploadPhoto(ALICE, original);
     const garment = GarmentSchema.parse(
-      (await server.request('POST', '/v1/garments', { user: ALICE, body: { category: 'top', imageId } })).body,
+      (await server.request('POST', '/v1/garments', { cookie: ALICE, body: { category: 'top', imageId } })).body,
     );
     expect(garment.image?.id).toBe(imageId);
 
@@ -80,6 +89,25 @@ describe('photo upload and storage', () => {
     expect(wrongType.status).toBe(415);
   });
 
+  it('rejects a corrupt photo whose header is valid as unsupported, not as a server error', async () => {
+    // A real failing case: a well-formed JPEG header with corrupt scan data. sharp reads the metadata, then
+    // libvips fails while decoding ("premature end of JPEG image").
+    const truncated = Buffer.from(
+      '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=',
+      'base64',
+    );
+    const whole = await samplePhoto(200, 200);
+    const t = await ticket();
+
+    const res = await server.postFile(t.url, truncated, 'image/jpeg');
+    expect(res.status).toBe(415);
+    expect(errorCode(await res.json())).toBe('unsupported_media_type');
+    expect(await storedFiles()).toHaveLength(0);
+
+    // The upload stays pending, so the same ticket can still take a good photo.
+    expect((await server.postFile(t.url, whole, 'image/jpeg')).status).toBe(204);
+  });
+
   it('rejects uploads over the size limit', async () => {
     const t = await ticket();
     const res = await server.postFile(t.url, Buffer.alloc(t.maxBytes + 1), 'image/jpeg');
@@ -96,11 +124,11 @@ describe('photo upload and storage', () => {
     const tampered = await server.postFile(t.url.replace(token, `${token.slice(0, -2)}xx`), photo, 'image/jpeg');
     expect(tampered.status).toBe(403);
 
-    const forgedToken = signToken({ kind: 'upload', imageId: t.imageId, ownerId: ALICE, exp: Date.now() + 60_000 }, 'wrong-secret');
+    const forgedToken = signToken({ kind: 'upload', imageId: t.imageId, ownerId: alice.userId, exp: Date.now() + 60_000 }, 'wrong-secret');
     expect((await server.postFile(`http://localhost/v1/uploads/${forgedToken}`, photo, 'image/jpeg')).status).toBe(403);
 
     const expiredToken = signToken(
-      { kind: 'upload', imageId: t.imageId, ownerId: ALICE, exp: Date.now() - 1 },
+      { kind: 'upload', imageId: t.imageId, ownerId: alice.userId, exp: Date.now() - 1 },
       'test-signing-secret-0123456789abcdef',
     );
     expect((await server.postFile(`http://localhost/v1/uploads/${expiredToken}`, photo, 'image/jpeg')).status).toBe(403);
@@ -113,7 +141,7 @@ describe('photo upload and storage', () => {
   it('rejects tampered read links and keeps files private to signed URLs', async () => {
     const imageId = await server.uploadPhoto(ALICE, await samplePhoto());
     const garment = GarmentSchema.parse(
-      (await server.request('POST', '/v1/garments', { user: ALICE, body: { category: 'top', imageId } })).body,
+      (await server.request('POST', '/v1/garments', { cookie: ALICE, body: { category: 'top', imageId } })).body,
     );
     const url = garment.image!.displayUrl;
 
@@ -125,12 +153,12 @@ describe('photo upload and storage', () => {
 
   it('refuses photos that are not finished uploading or already belong to another garment', async () => {
     const pending = await ticket();
-    const notReady = await server.request('POST', '/v1/garments', { user: ALICE, body: { category: 'top', imageId: pending.imageId } });
+    const notReady = await server.request('POST', '/v1/garments', { cookie: ALICE, body: { category: 'top', imageId: pending.imageId } });
     expect(notReady.status).toBe(409);
 
     const imageId = await server.uploadPhoto(ALICE, await samplePhoto());
-    expect((await server.request('POST', '/v1/garments', { user: ALICE, body: { category: 'top', imageId } })).status).toBe(201);
-    const twice = await server.request('POST', '/v1/garments', { user: ALICE, body: { category: 'bottom', imageId } });
+    expect((await server.request('POST', '/v1/garments', { cookie: ALICE, body: { category: 'top', imageId } })).status).toBe(201);
+    const twice = await server.request('POST', '/v1/garments', { cookie: ALICE, body: { category: 'bottom', imageId } });
     expect(twice.status).toBe(409);
     expect(errorCode(twice.body)).toBe('conflict');
   });
@@ -143,31 +171,31 @@ describe('photo upload and storage', () => {
   it('removes the old photo when a garment photo is replaced, and all photos when it is deleted', async () => {
     const first = await server.uploadPhoto(ALICE, await samplePhoto());
     const garment = GarmentSchema.parse(
-      (await server.request('POST', '/v1/garments', { user: ALICE, body: { category: 'top', imageId: first } })).body,
+      (await server.request('POST', '/v1/garments', { cookie: ALICE, body: { category: 'top', imageId: first } })).body,
     );
     const oldUrl = garment.image!.displayUrl;
     expect(await storedFiles()).toHaveLength(2); // display + thumbnail
 
     const second = await server.uploadPhoto(ALICE, await samplePhoto());
     const replaced = GarmentSchema.parse(
-      (await server.request('PATCH', `/v1/garments/${garment.id}`, { user: ALICE, body: { imageId: second } })).body,
+      (await server.request('PATCH', `/v1/garments/${garment.id}`, { cookie: ALICE, body: { imageId: second } })).body,
     );
     expect(replaced.image?.id).toBe(second);
     expect((await fetchBytes(oldUrl)).status).toBe(404);
     expect(await storedFiles()).toHaveLength(2);
 
-    expect((await server.request('DELETE', `/v1/garments/${garment.id}`, { user: ALICE })).status).toBe(204);
+    expect((await server.request('DELETE', `/v1/garments/${garment.id}`, { cookie: ALICE })).status).toBe(204);
     expect(await storedFiles()).toHaveLength(0);
   });
 
   it("can't touch another user's photo by deleting their own garment", async () => {
     const bobsPhoto = await server.uploadPhoto(BOB, await samplePhoto());
     const bobs = GarmentSchema.parse(
-      (await server.request('POST', '/v1/garments', { user: BOB, body: { category: 'top', imageId: bobsPhoto } })).body,
+      (await server.request('POST', '/v1/garments', { cookie: BOB, body: { category: 'top', imageId: bobsPhoto } })).body,
     );
-    const alices = GarmentSchema.parse((await server.request('POST', '/v1/garments', { user: ALICE, body: { category: 'top' } })).body);
+    const alices = GarmentSchema.parse((await server.request('POST', '/v1/garments', { cookie: ALICE, body: { category: 'top' } })).body);
 
-    await server.request('DELETE', `/v1/garments/${alices.id}`, { user: ALICE });
+    await server.request('DELETE', `/v1/garments/${alices.id}`, { cookie: ALICE });
     expect((await fetchBytes(bobs.image!.displayUrl)).status).toBe(200);
   });
 });

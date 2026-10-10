@@ -4,35 +4,44 @@ import { z } from 'zod';
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(3000),
-  /**
-   * Development-only identity: trusts the `X-Dev-User-Id` header. Stands in for Better Auth until sign-in exists.
-   * Never allowed in production.
-   */
-  DEV_AUTH: z
-    .enum(['true', 'false'])
-    .default('false')
-    .transform((value) => value === 'true'),
-  /** Root for the embedded database and locally stored photos. */
+  /** Root for the embedded database, locally stored photos and the development email outbox. */
   DATA_DIR: z.string().min(1).default('.data'),
   /** HMAC secret for signed upload and read URLs. */
   STORAGE_SIGNING_SECRET: z.string().min(32).optional(),
+  /** Better Auth secret: signs session cookies and hashes stored codes. Must stay stable across restarts. */
+  BETTER_AUTH_SECRET: z.string().min(32).optional(),
+  /** How sign-in codes are delivered. Only the development outbox exists yet; there is no production provider. */
+  EMAIL_DELIVERY: z.enum(['dev-outbox']).default('dev-outbox'),
+  /** Removed: identity now comes only from a verified session. Rejected so stale configs fail loudly. */
+  DEV_AUTH: z.string().optional(),
 });
 
 export type Config = {
   nodeEnv: 'development' | 'test' | 'production';
   port: number;
-  devAuth: boolean;
   dataDir: string;
   signingSecret: string;
+  authSecret: string;
+  emailDelivery: 'dev-outbox';
 };
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const parsed = EnvSchema.parse(env);
 
+  if (parsed.DEV_AUTH !== undefined) {
+    throw new Error('DEV_AUTH has been removed: sign in with an email code instead. Delete it from your .env.');
+  }
+
   if (parsed.NODE_ENV === 'production') {
-    if (parsed.DEV_AUTH) throw new Error('DEV_AUTH must never be enabled in production.');
-    // The embedded PGlite database and local-disk photo storage are development stand-ins (ARCHITECTURE.md §2).
-    throw new Error('Production database and object storage adapters are not implemented yet.');
+    // No real email provider exists, so sign-in can't work for real users, and the development outbox must never
+    // stand in for delivery. The embedded database and local-disk photo storage are development stand-ins too.
+    throw new Error(
+      'Production is not supported yet: no real email provider, production database or object storage adapter exists.',
+    );
+  }
+
+  if (!parsed.BETTER_AUTH_SECRET) {
+    throw new Error('BETTER_AUTH_SECRET is required (at least 32 characters). See apps/server/.env.example.');
   }
 
   let signingSecret = parsed.STORAGE_SIGNING_SECRET;
@@ -45,8 +54,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   return {
     nodeEnv: parsed.NODE_ENV,
     port: parsed.PORT,
-    devAuth: parsed.DEV_AUTH,
     dataDir: parsed.DATA_DIR,
     signingSecret,
+    authSecret: parsed.BETTER_AUTH_SECRET,
+    emailDelivery: parsed.EMAIL_DELIVERY,
   };
 }

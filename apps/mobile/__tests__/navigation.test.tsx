@@ -8,8 +8,11 @@ import WardrobeRoute from '../app/(tabs)/wardrobe';
 import AddGarmentRoute from '../app/add-garment';
 import ApiStatusRoute from '../app/dev/api-status';
 import QuestionnaireRoute from '../app/questionnaire';
+import EditGarmentRoute from '../app/garment/[id]/edit';
+import GarmentRoute from '../app/garment/[id]/index';
 import StoryRoute from '../app/story/[id]';
 import { SAMPLE_STORIES } from '../src/features/inspiration/sample-stories';
+import { installFakeApi, type FakeApi } from '../test-support/fake-api';
 
 const routes = {
   _layout: RootLayout,
@@ -22,6 +25,8 @@ const routes = {
   'add-garment': AddGarmentRoute,
   questionnaire: QuestionnaireRoute,
   'dev/api-status': ApiStatusRoute,
+  'garment/[id]/index': GarmentRoute,
+  'garment/[id]/edit': EditGarmentRoute,
 };
 
 const leadStory = SAMPLE_STORIES[0]!;
@@ -36,6 +41,10 @@ async function renderApp(initialUrl = '/') {
   return { getPathname: () => result.getPathname(), getRouterState: () => result.getRouterState() };
 }
 
+let api: FakeApi;
+beforeEach(() => {
+  api = installFakeApi(); // an empty wardrobe unless a test seeds one
+});
 afterEach(() => {
   jest.restoreAllMocks();
 });
@@ -71,14 +80,14 @@ describe('primary navigation', () => {
 });
 
 describe('Home', () => {
-  it('guides an empty wardrobe to adding a garment, and the preview closes back to Home', async () => {
+  it('guides an empty wardrobe to adding a garment, and cancelling returns to Home', async () => {
     const router = await renderApp();
 
-    await fireEvent.press(screen.getByRole('button', { name: 'Add your first garment' }));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Add your first garment' }));
     expect(router.getPathname()).toBe('/add-garment');
-    expect(screen.getByText('Not available in this preview build yet.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Save to wardrobe' })).toBeTruthy();
 
-    await fireEvent.press(screen.getByRole('button', { name: 'Close' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Cancel' }));
     expect(router.getPathname()).toBe('/');
   });
 
@@ -116,7 +125,7 @@ describe('Wardrobe', () => {
   it('filters by category and reflects the empty state for that category', async () => {
     await renderApp('/wardrobe');
 
-    expect(screen.getByText('Nothing here yet.')).toBeTruthy();
+    expect(await screen.findByText('Nothing here yet.')).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'Tops' }));
 
     expect(screen.getByRole('button', { name: 'Tops', selected: true })).toBeTruthy();
@@ -129,7 +138,7 @@ describe('Stylist', () => {
   it('shows the chosen occasion as an ingredient and routes an empty wardrobe to adding garments', async () => {
     const router = await renderApp('/stylist');
 
-    expect(screen.getByText('Empty. Add a few pieces to begin.')).toBeTruthy();
+    expect(await screen.findByText('Empty. Add a few pieces to begin.')).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'Festive' }));
     expect(screen.getByRole('button', { name: 'Festive', selected: true })).toBeTruthy();
     // Once as the chip, once as the occasion ingredient's status.
@@ -152,21 +161,11 @@ describe('Profile', () => {
   });
 
   it('links to the developer API check in development builds, which reports a healthy API', async () => {
-    const originalApiUrl = process.env.EXPO_PUBLIC_API_URL;
-    process.env.EXPO_PUBLIC_API_URL = 'http://api.test';
-    const fetchMock = jest
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response(JSON.stringify({ status: 'ok' }), { status: 200 }));
+    const router = await renderApp('/profile');
+    await fireEvent.press(screen.getByRole('button', { name: 'API connection check' }));
 
-    try {
-      const router = await renderApp('/profile');
-      await fireEvent.press(screen.getByRole('button', { name: 'API connection check' }));
-
-      expect(router.getPathname()).toBe('/dev/api-status');
-      expect(await screen.findByText('API reachable')).toBeTruthy();
-      expect(fetchMock).toHaveBeenCalledWith('http://api.test/v1/health');
-    } finally {
-      process.env.EXPO_PUBLIC_API_URL = originalApiUrl;
-    }
+    expect(router.getPathname()).toBe('/dev/api-status');
+    expect(await screen.findByText('API reachable')).toBeTruthy();
+    expect(api.fetchMock).toHaveBeenCalledWith('http://api.test/v1/health');
   });
 });

@@ -1,19 +1,39 @@
+import type { GarmentCategory, GarmentOccasion } from '@fashion-saavy/contracts';
+import { useGarments } from '../../api/garments';
+
 /**
- * The user's wardrobe as the UI sees it.
- *
- * There is no garment persistence yet (no API, no local storage), so the wardrobe is always empty.
- * When the wardrobe API exists, this becomes a TanStack Query hook and screens keep the same shape.
+ * The user's wardrobe as other screens see it, from the API (persisted server-side).
+ * `garmentCount` is null while loading or after an error, so screens never claim an empty wardrobe they
+ * haven't confirmed.
  */
-export type WardrobeSummary = { garmentCount: number };
+export type WardrobeSummary = { garmentCount: number | null; isError: boolean };
 
 export function useWardrobeSummary(): WardrobeSummary {
-  return { garmentCount: 0 };
+  const garments = useGarments();
+  return { garmentCount: garments.data?.length ?? null, isError: garments.isError };
 }
 
 /**
- * Provisional browsing categories. The V1 garment taxonomy is an open product question
- * (docs/PRODUCT.md), so these are display filters only. Clothing only: no shoes in V1.
+ * Display labels for the provisional V1 categories (contracts). The final taxonomy is an open product
+ * question (docs/PRODUCT.md). Clothing only: no shoes in V1.
  */
-export const WARDROBE_CATEGORIES = ['All', 'Tops', 'Bottoms', 'Ethnic wear', 'Dresses', 'Layers'] as const;
+export const CATEGORY_LABELS: Record<GarmentCategory, { plural: string; singular: string }> = {
+  top: { plural: 'Tops', singular: 'Top' },
+  bottom: { plural: 'Bottoms', singular: 'Bottom' },
+  ethnic: { plural: 'Ethnic wear', singular: 'Ethnic wear' },
+  dress: { plural: 'Dresses', singular: 'Dress' },
+  layer: { plural: 'Layers', singular: 'Layer' },
+};
 
-export type WardrobeCategory = (typeof WARDROBE_CATEGORIES)[number];
+export const OCCASION_LABELS: Record<GarmentOccasion, string> = {
+  college: 'College',
+  everyday: 'Everyday',
+  weekend: 'Weekend',
+  festive: 'Festive',
+  evening: 'Evening',
+  formal: 'Formal',
+};
+
+export function pieceCount(count: number): string {
+  return count === 1 ? '1 piece' : `${count} pieces`;
+}

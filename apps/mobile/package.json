@@ -11,17 +11,24 @@
     "test": "jest"
   },
   "jest": {
-    "preset": "jest-expo"
+    "preset": "jest-expo",
+    "setupFiles": [
+      "<rootDir>/jest.setup.ts"
+    ]
   },
   "dependencies": {
+    "@better-auth/core": "1.7.7",
+    "@better-auth/expo": "1.7.7",
     "@fashion-saavy/contracts": "workspace:*",
     "@tanstack/react-query": "^5.104.1",
+    "better-auth": "1.7.7",
     "expo": "~57.0.27",
     "expo-constants": "~57.0.21",
     "expo-dev-client": "~57.0.19",
     "expo-image-picker": "~57.0.20",
     "expo-linking": "~57.0.12",
     "expo-router": "~57.0.25",
+    "expo-secure-store": "~57.0.4",
     "react": "19.2.3",
     "react-native": "0.86.3",
     "react-native-safe-area-context": "~5.7.0",

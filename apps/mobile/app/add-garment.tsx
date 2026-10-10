@@ -1,3 +1,3 @@
-import { AddGarmentPreview } from '../src/features/wardrobe/AddGarmentPreview';
+import { AddGarmentScreen } from '../src/features/wardrobe/AddGarmentScreen';
 
-export default AddGarmentPreview;
+export default AddGarmentScreen;

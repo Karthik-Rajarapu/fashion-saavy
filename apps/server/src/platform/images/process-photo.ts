@@ -31,17 +31,23 @@ export async function processGarmentPhoto(input: Buffer): Promise<ProcessedPhoto
     throw new UnsupportedImageError('Only JPEG, PNG or WebP photos are supported.');
   }
 
-  const oriented = sharp(input, { limitInputPixels: 50_000_000 }).rotate();
-  const display = await oriented
-    .clone()
-    .resize(DISPLAY_EDGE, DISPLAY_EDGE, { fit: 'inside', withoutEnlargement: true })
-    .jpeg({ quality: 82, mozjpeg: true })
-    .toBuffer({ resolveWithObject: true });
-  const thumbnail = await oriented
-    .clone()
-    .resize(THUMBNAIL_EDGE, THUMBNAIL_EDGE, { fit: 'inside', withoutEnlargement: true })
-    .jpeg({ quality: 78, mozjpeg: true })
-    .toBuffer();
+  // A valid header doesn't guarantee decodable pixels (e.g. a truncated upload), so decoding failures are the
+  // client's bad file, not a server error.
+  try {
+    const oriented = sharp(input, { limitInputPixels: 50_000_000 }).rotate();
+    const display = await oriented
+      .clone()
+      .resize(DISPLAY_EDGE, DISPLAY_EDGE, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 82, mozjpeg: true })
+      .toBuffer({ resolveWithObject: true });
+    const thumbnail = await oriented
+      .clone()
+      .resize(THUMBNAIL_EDGE, THUMBNAIL_EDGE, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 78, mozjpeg: true })
+      .toBuffer();
 
-  return { display: display.data, thumbnail, width: display.info.width, height: display.info.height };
+    return { display: display.data, thumbnail, width: display.info.width, height: display.info.height };
+  } catch {
+    throw new UnsupportedImageError('The file is not a readable image.');
+  }
 }

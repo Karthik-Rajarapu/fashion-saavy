@@ -7,13 +7,13 @@ import { Rule } from '../../ui/Rule';
 import { SampleTag } from '../../ui/SampleTag';
 import { Screen } from '../../ui/Screen';
 import { colors, gutter, space } from '../../ui/tokens';
-import { useWardrobeSummary } from '../wardrobe/wardrobe-state';
+import { pieceCount, useWardrobeSummary } from '../wardrobe/wardrobe-state';
 import { EXAMPLE_STYLE_PROFILE, useStyleProfile, type StyleProfileSummary } from './style-profile-state';
 
 export function ProfileScreen() {
   const router = useRouter();
   const profile = useStyleProfile();
-  const { garmentCount } = useWardrobeSummary();
+  const { garmentCount, isError: wardrobeError } = useWardrobeSummary();
 
   return (
     <Screen>
@@ -55,7 +55,7 @@ export function ProfileScreen() {
         <Rule strong />
         <InfoRow
           title="Wardrobe"
-          detail={garmentCount === 1 ? '1 piece' : `${garmentCount} pieces`}
+          detail={garmentCount !== null ? pieceCount(garmentCount) : wardrobeError ? "Couldn't load right now." : 'Checking…'}
           action={<Button label="Open wardrobe" variant="link" onPress={() => router.navigate('/wardrobe')} />}
         />
         <InfoRow
